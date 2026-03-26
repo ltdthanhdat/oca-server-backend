@@ -34,7 +34,7 @@ class BaseExternalDbsource(models.Model):
     _name = "base.external.dbsource"
     _description = "External Database Sources"
 
-    CONNECTORS = [("postgresql", "PostgreSQL")]
+    CONNECTORS = [("postgresql", "PostgreSQL"), ("db2", "IBM DB2")]
     # This is appended to the conn string if pass declared but not detected.
     # Children should declare PWD_STRING_CONNECTOR (such as PWD_STRING_FBD)
     #   to allow for override.
@@ -293,6 +293,39 @@ class BaseExternalDbsource(models.Model):
                 cols = [d[0] for d in cur.description]
             rows = cur.fetchall()
             return rows, cols
+
+    # IBM DB2 Adapter
+
+    def connection_open_db2(self):
+        """Open IBM DB2 connection using SQLAlchemy"""
+        try:
+            from sqlalchemy import create_engine
+            engine = create_engine(self.conn_string_full)
+            return engine.connect()
+        except ImportError:
+            raise NotImplementedError(
+                _("SQLAlchemy and ibm_db_sa are required for DB2 support")
+            ) from ImportError
+
+    def connection_close_db2(self, connection):
+        """Close DB2 connection"""
+        connection.close()
+
+    def execute_db2(self, query, params, metadata):
+        """Execute SQL query on DB2"""
+        try:
+            from sqlalchemy import text
+        except ImportError:
+            raise NotImplementedError(
+                _("SQLAlchemy is required for DB2 support")
+            ) from ImportError
+
+        with self.connection_open_db2() as conn:
+            result = conn.execute(text(query), params or {})
+            rows = [list(r) for r in result]
+            cols = list(result.keys()) if metadata else []
+
+        return rows, cols
 
     # Compatibility & Private
 
